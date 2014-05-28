@@ -52,17 +52,25 @@ class Ball:
 class Paddle:
     def __init__(self, x, y):
         self.width = x//5
+        self.max_x = x
         self.x = x//2-self.width//2
         self.y = y
 
     def is_in_contact_with(self, x, y):
-        return self.y == y+1
+        return self.y == y+1 and x <= self.x + self.width and x >= self.x
+
+    def move_left(self):
+        if self.x > 0:
+            self.x -= 1
+
+    def move_right(self):
+        if self.x + self.width < self.max_x:
+            self.x += 1
 
 class Game:
     def __init__(self, x, y):
         self.size = (x, y)
-        self.blocks_start_at_row = y // 2
-        self.add_blocks(x, self.blocks_start_at_row)
+        self.add_blocks(x, y//2)
         self.in_play = False
         self.paddle = Paddle(x, y-1)
         # ball starts in the middle of the first row up
@@ -77,6 +85,11 @@ class Game:
     def handle_input(self, user_input):
         if user_input == ord(' ') and self.in_play == False:
             self.in_play = True
+        if self.in_play:
+            if user_input == ord('h'):
+                self.paddle.move_left()
+            if user_input == ord('l'):
+                self.paddle.move_right()
 
     def update(self):
         # also need to handle touching the edges
@@ -88,17 +101,21 @@ class Game:
         self.ball.touching_block.alive = False
 
     def render(self, screen):
+        self.clear_screen(screen)
         self.render_blocks(screen)
         self.render_ball(screen)
         self.render_paddle(screen)
         screen.refresh()
 
+    def clear_screen(self, screen):
+        for row in range(0, self.size[1]-1):
+            screen.addstr(row, 0, ' '*self.size[0])
+
+        # we can't write the last character normally with curses
+        screen.addstr(self.size[1]-1, 0, ' '*(self.size[0]-1))
+        screen.insstr(self.size[1]-1, self.size[0]-1, ' ')
+
     def render_ball(self, screen):
-        # pretty inefficient for now... just wipe out all non-block cells
-        # before drawing the ball
-        for row in range(self.blocks_start_at_row, self.size[1]-1):
-            for col in range(0, self.size[0]-1):
-                screen.addstr(row, col, ' ')
         screen.addstr(self.ball.y, self.ball.x, 'x')
 
     def render_blocks(self, screen):
@@ -109,7 +126,12 @@ class Game:
                 screen.addstr(pos[1], pos[0], ' ')
 
     def render_paddle(self, screen):
-        screen.addstr(self.paddle.y, self.paddle.x, '='*self.paddle.width)
+        if self.paddle.x + self.paddle.width > self.size[0]:
+            screen.addstr(self.paddle.y, self.paddle.x, '='*self.paddle.width)
+        else:
+            # we can't write the last character normally with curses
+            screen.addstr(self.paddle.y, self.paddle.x, '='*(self.paddle.width-1))
+            screen.insstr(self.paddle.y, self.paddle.x+1, '=')
 
 def main(screen):
     screen.nodelay(1) # user input is non-blocking
