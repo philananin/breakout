@@ -5,6 +5,8 @@ Just thought I'd have a go at some Python, since it's been quite some time since
 
 It uses curses to render the game in the terminal.
 
+Yes, I know about pygame. I'm trying to make sure I understand the fundamentals before I use libraries or frameworks.
+
 Setup
 =====
 
