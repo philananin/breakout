@@ -24,7 +24,7 @@ class Ball:
         self.direction = 1-self.direction
 
     def update(self, paddle, blocks):
-        if self.touching_block is not None:
+        if self.touching_block is not None and self.touching_block.alive:
             self.remove_touching_block()
             self.change_direction()
 
@@ -56,7 +56,7 @@ class Paddle:
         self.y = y
 
     def is_in_contact_with(self, x, y):
-        self.y-1 == y
+        return self.y == y+1
 
 class Game:
     def __init__(self, x, y):
@@ -88,8 +88,8 @@ class Game:
         self.ball.touching_block.alive = False
 
     def render(self, screen):
-        self.render_ball(screen)
         self.render_blocks(screen)
+        self.render_ball(screen)
         self.render_paddle(screen)
         screen.refresh()
 
