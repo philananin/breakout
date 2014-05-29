@@ -75,6 +75,7 @@ class Game:
         self.paddle = Paddle(x, y-1)
         # ball starts in the middle of the first row up
         self.ball = Ball(x // 2, y-2, Direction.UP)
+        self.frame = 0
 
     def add_blocks(self, cols, rows):
         self.blocks = {}
@@ -94,8 +95,11 @@ class Game:
     def update(self):
         # also need to handle touching the edges
         # and resetting if we touch the bottom
-        if self.in_play:
+        if self.frame == 0 and self.in_play:
             self.ball.update(self.paddle, self.blocks)
+
+        self.frame += 1
+        self.frame = self.frame % 5
 
     def remove_touching_block(self):
         self.ball.touching_block.alive = False
@@ -146,7 +150,7 @@ def main(screen):
 
         game.update()
         game.render(screen)
-        time.sleep(0.05)
+        time.sleep(0.01)
 
 if __name__ == '__main__':
     curses.wrapper(main)
