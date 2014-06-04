@@ -1,63 +1,153 @@
+from datetime import datetime
+from enum import Enum
 import random
 import time
+import math
 import curses
+import logging
 
-class Block:
-    def __init__(self):
-        self.alive = True
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('hello.log')
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
 
-class Direction:
-    UP = 0
-    DOWN = 1
+class Block(object):
+    def __init__(self, pos, sym, color, on_hit):
+        self.pos = pos
+        self.on_hit = on_hit
+        self.color = color
+        self.sym = sym
 
-class Ball:
-    def __init__(self, x, y, direction):
+    def hit(self):
+        self.on_hit((self.pos.x, self.pos.y))
+
+    def render(self, screen):
+        max_y, max_x = screen.getmaxyx()
+        if self.pos.x == max_x and self.pos.y == max_y:
+            char = screen.getch(max_y, max_x - 1)
+            screen.addstr(max_y, max_x - 1, self.sym)
+            screen.insstr(max_y, max_x - 1, char)
+        else:
+            screen.addstr(self.pos.y, self.pos.x, self.sym, self.color)
+
+class Vec2(object):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.direction = direction
-        self.touching_block = None
-        self.touching_paddle = False
 
-    def change_direction(self):
-        self.touching_paddle = False
-        self.touching_block = None
-        self.direction = 1-self.direction
+    def translate(self, target):
+        return Vec2(self.x + target.x, self.y + target.y)
 
-    def update(self, paddle, blocks):
-        if self.touching_block is not None and self.touching_block.alive:
-            self.remove_touching_block()
-            self.change_direction()
+    def scale(self, scalar):
+        return Vec2(self.x * scalar, self.y * scalar)
 
-        if self.touching_paddle:
-            self.change_direction()
+class Plane(Enum):
+    X = 0
+    Y = 1
+    BOTH = 2
 
-        self.move()
-        self.check_collision(paddle, blocks)
+class Ball:
+    def __init__(self, pos):
+        self.pos = pos
+        self.angle = -math.pi/2 + random.uniform(-0.5, 0.5)
+        self.direction_vec = Vec2(math.cos(self.angle),
+                                  math.sin(self.angle))
+        self.speed = 8 # move 8 blocks per second
 
-    def remove_touching_block(self):
-        self.touching_block.alive = False
+    def update(self, paddle, blocks, dt):
+        def get_new_position():
+            logger.info('direction_vec: %f, %f', self.direction_vec.x, self.direction_vec.y)
+            scaled = self.direction_vec.scale(dt * self.speed)
+            logger.info('scaled: %f, %f', scaled.x, scaled.y)
+            return self.pos.translate(scaled)
 
-    def move(self):
-        if self.direction == Direction.UP:
-            self.y -= 1
+        # todo: technically we could cross more than one cell...
+        def get_crossed_cell(old_pos, new_pos):
+            crossed_x = math.floor(new_pos.x) != math.floor(old_pos.x)
+            crossed_y = math.floor(new_pos.y) != math.floor(old_pos.y)
+
+            if crossed_x and crossed_y:
+                return (Vec2(math.floor(new_pos.x), math.floor(new_pos.y)),
+                        Plane.BOTH)
+            if crossed_x:
+                return (Vec2(math.floor(new_pos.x), math.floor(new_pos.y)),
+                        Plane.Y)
+            if crossed_y:
+                return (Vec2(math.floor(new_pos.x), math.floor(new_pos.y)),
+                        Plane.X)
+
+        def get_hit_block_and_crossed_plane(cell):
+            logger.info('get_hit_block_and_crossed_plane called')
+            block = blocks.get((cell[0].x, cell[0].y), None)
+            if block:
+                logger.info('block found: %s', block)
+                return (block, cell[1])
+            if paddle.occupies_cell(cell[0].x, cell[0].y):
+                logger.info('paddle touches!')
+                return (paddle, Plane.X)
+
+        # todo
+        def get_time_to_hit(hit_pos):
+            return 0
+
+        logger.info('dt: %d', dt)
+        logger.info('old pos: %f, %f', self.pos.x, self.pos.y)
+        new_pos = get_new_position()
+        logger.info('new pos: %f, %f', new_pos.x, new_pos.y)
+
+        # starting at a floored position makes this inaccurate, but a simple
+        # implementation for now
+        floored_x = int(math.floor(self.pos.x))
+        floored_y = int(math.floor(self.pos.y))
+        logger.info('floored_x: %d, floored_y: %d', floored_x, floored_y)
+        crossed_cell = get_crossed_cell(self.pos, new_pos)
+
+        if not crossed_cell:
+            logger.info('no crossed cells')
+            self.pos = new_pos
         else:
-            self.y += 1
+            result = get_hit_block_and_crossed_plane(crossed_cell)
+            if not result:
+                logger.info('no hit block')
+                self.pos = new_pos
+            else:
+                logger.info('HIT BLOCK!')
+                hit_block, plane = result
+                time_to_hit = 0 # todo - paddle doesn't work with pos: get_time_to_hit(hit_block.pos)
+                time_remaining = dt - time_to_hit
+                self.bounce(plane)
+                hit_block.hit()
+                self.update(paddle, blocks, time_remaining)
 
-    def check_collision(self, paddle, blocks):
-        if self.direction == Direction.UP:
-            self.touching_block = blocks.get((self.x, self.y-1), None)
-        else:
-            self.touching_paddle = paddle.is_in_contact_with(self.x, self.y)
+    def bounce(self, plane):
+        logger.info('bouncing! in plane %s', plane)
+        logger.info('angle: %f', self.angle)
+        logger.info('direction: %f, %f', self.direction_vec.x, self.direction_vec.y)
+        if plane == Plane.X or plane == Plane.BOTH:
+            self.angle = -self.angle
+        if plane == Plane.Y or plane == Plane.BOTH:
+            if self.angle >= 0:
+                self.angle = math.pi - self.angle
+            else:
+                self.angle = -math.pi - self.angle
+        logger.info('new angle: %f', self.angle)
+        self.direction_vec = Vec2(math.cos(self.angle),
+                                  math.sin(self.angle))
+        logger.info('new direction: %f, %f', self.direction_vec.x, self.direction_vec.y)
 
 class Paddle:
     def __init__(self, x, y):
-        self.width = x//5
+        self.width = x // 5
         self.max_x = x
-        self.x = x//2-self.width//2
+        self.x = x // 2 - self.width // 2
         self.y = y
 
-    def is_in_contact_with(self, x, y):
-        return self.y == y+1 and x <= self.x + self.width and x >= self.x
+    def occupies_cell(self, x, y):
+        return self.y == y and x <= self.x + self.width and x >= self.x
+
+    def hit(self):
+        pass
 
     def move_left(self):
         if self.x > 0:
@@ -67,21 +157,37 @@ class Paddle:
         if self.x + self.width < self.max_x:
             self.x += 1
 
-class Game:
+class Game(object):
     def __init__(self, x, y):
         self.size = (x, y)
-        self.add_blocks(x, y//2)
         self.in_play = False
-        self.paddle = Paddle(x, y-1)
+        self.paddle = Paddle(x, y - 1)
         # ball starts in the middle of the first row up
-        self.ball = Ball(x // 2, y-2, Direction.UP)
-        self.frame = 0
+        self.ball = Ball(Vec2(x // 2, y - 2))
+        self.blocks = {}
+        self.add_blocks(x, y)
 
     def add_blocks(self, cols, rows):
-        self.blocks = {}
-        for x in range(0, cols):
-            for y in range(0, rows):
-                self.blocks[(x, y)] = Block()
+        for x in range(2, cols - 3):
+            for y in range(2, rows // 2):
+                self.blocks[(x, y)] = Block(Vec2(x, y), '%',
+                                            curses.color_pair(1),
+                                            lambda coords: self.remove_block(coords))
+        for x in range(1, cols - 1):
+            self.blocks[(x, 0)] = Block(Vec2(x, 0), '═', curses.color_pair(2),
+                    lambda x: None)
+        for y in range (1, rows - 1):
+            self.blocks[(0, y)] = Block(Vec2(0, y), '║', curses.color_pair(2),
+                    lambda x: None)
+            self.blocks[(cols - 1, y)] = Block(Vec2(cols - 1, y), '║', curses.color_pair(2),
+                    lambda x: None)
+        self.blocks[(0, 0)] = Block(Vec2(0, 0), '╔', curses.color_pair(2),
+                    lambda x: None)
+        self.blocks[(cols - 1, 0)] = Block(Vec2(cols - 1, 0), '╗', curses.color_pair(2),
+                    lambda x: None)
+
+    def remove_block(self, coords):
+        self.blocks.pop(coords)
 
     def handle_input(self, user_input):
         if user_input == ord(' ') and self.in_play == False:
@@ -92,64 +198,75 @@ class Game:
             if user_input == ord('l'):
                 self.paddle.move_right()
 
-    def update(self):
+    def update(self, dt):
         # also need to handle touching the edges
         # and resetting if we touch the bottom
-        if self.frame == 0 and self.in_play:
-            self.ball.update(self.paddle, self.blocks)
-
-        self.frame += 1
-        self.frame = self.frame % 5
-
-    def remove_touching_block(self):
-        self.ball.touching_block.alive = False
+        if self.in_play:
+            self.ball.update(self.paddle, self.blocks, dt)
 
     def render(self, screen):
-        self.clear_screen(screen)
+        def clear_screen():
+            for row in range(0, self.size[1] - 1):
+                screen.addstr(row, 0, ' ' * self.size[0])
+
+            # we can't write the last character normally with curses
+            screen.addstr(self.size[1] - 1, 0, ' ' * (self.size[0] - 1))
+            screen.insstr(self.size[1] - 1, self.size[0] - 1, ' ')
+
+        clear_screen()
         self.render_blocks(screen)
         self.render_ball(screen)
         self.render_paddle(screen)
         screen.refresh()
 
-    def clear_screen(self, screen):
-        for row in range(0, self.size[1]-1):
-            screen.addstr(row, 0, ' '*self.size[0])
-
-        # we can't write the last character normally with curses
-        screen.addstr(self.size[1]-1, 0, ' '*(self.size[0]-1))
-        screen.insstr(self.size[1]-1, self.size[0]-1, ' ')
-
     def render_ball(self, screen):
-        screen.addstr(self.ball.y, self.ball.x, 'x')
+        floored_x = math.floor(self.ball.pos.x)
+        floored_y = math.floor(self.ball.pos.y)
+        logger.info('render ball at %d, %d', floored_x, floored_y)
+        screen.addstr(floored_y, floored_x, 'O')
 
     def render_blocks(self, screen):
-        for pos, block in self.blocks.iteritems():
-            if block.alive:
-                screen.addstr(pos[1], pos[0], '#')
-            else:
-                screen.addstr(pos[1], pos[0], ' ')
+        for pos, block in self.blocks.items():
+            block.render(screen)
 
     def render_paddle(self, screen):
         if self.paddle.x + self.paddle.width > self.size[0]:
-            screen.addstr(self.paddle.y, self.paddle.x, '='*self.paddle.width)
+            screen.addstr(self.paddle.y, self.paddle.x, '=' * self.paddle.width)
         else:
             # we can't write the last character normally with curses
-            screen.addstr(self.paddle.y, self.paddle.x, '='*(self.paddle.width-1))
+            screen.addstr(self.paddle.y,
+                          self.paddle.x, '=' * (self.paddle.width-1))
             screen.insstr(self.paddle.y, self.paddle.x+1, '=')
 
 def main(screen):
     screen.nodelay(1) # user input is non-blocking
+    curses.curs_set(0) # don't display cursor
+
+    curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
 
     screen_y, screen_x = screen.getmaxyx()
     game = Game(screen_x, screen_y)
+    last_frame_time = datetime.now()
 
     while True:
+        now = datetime.now()
+        # logger.info('now: %d', now)
+        # logger.info('last_frame_time: %d', last_frame_time)
+        rar = (now - last_frame_time).microseconds
+        logger.info('dt raw: %d', rar)
+        dt = rar / float(1000000)
+        logger.info('dt: %f', dt)
+        last_frame_time = now
+
         user_input = screen.getch()
-        if user_input != -1:
+        no_user_input = user_input == -1
+        if not no_user_input:
             game.handle_input(user_input)
 
-        game.update()
+        game.update(dt)
         game.render(screen)
+        # todo: put fps limit in?
         time.sleep(0.01)
 
 if __name__ == '__main__':
