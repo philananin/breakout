@@ -158,40 +158,41 @@ class Paddle:
             self.x += 1
 
 class Game(object):
-    def __init__(self, x, y):
-        self.size = (x, y)
+    def __init__(self, width, height):
+        self.size = (width, height)
         self.in_play = False
-        self.paddle = Paddle(x, y - 1)
-        # ball starts in the middle of the first row up
-        self.ball = Ball(Vec2(x // 2, y - 2))
+        self.paddle = Paddle(width, height - 1)
+        self.ball = Ball(Vec2(width // 2, height - 2))
+
         self.blocks = {}
-        self.add_blocks(x, y)
+        self.add_blocks(width, height)
 
-    def add_blocks(self, cols, rows):
-        for x in range(2, cols - 3):
-            for y in range(2, rows // 2):
-                self.blocks[(x, y)] = Block(Vec2(x, y), '%',
-                                            curses.color_pair(1),
-                                            lambda coords: self.remove_block(coords))
-        for x in range(1, cols - 1):
-            self.blocks[(x, 0)] = Block(Vec2(x, 0), '═', curses.color_pair(2),
-                    lambda x: None)
-        for y in range (1, rows - 1):
-            self.blocks[(0, y)] = Block(Vec2(0, y), '║', curses.color_pair(2),
-                    lambda x: None)
-            self.blocks[(cols - 1, y)] = Block(Vec2(cols - 1, y), '║', curses.color_pair(2),
-                    lambda x: None)
-        self.blocks[(0, 0)] = Block(Vec2(0, 0), '╔', curses.color_pair(2),
-                    lambda x: None)
-        self.blocks[(cols - 1, 0)] = Block(Vec2(cols - 1, 0), '╗', curses.color_pair(2),
-                    lambda x: None)
+    def add_blocks(self, width, height):
+        self.add_border(width, height)
+        yellow = curses.color_pair(1)
 
-    def remove_block(self, coords):
-        self.blocks.pop(coords)
+        for x in range(2, width - 3):
+            for y in range(2, height // 2):
+                self.blocks[(x, y)] = Block(Vec2(x, y), '%', yellow, self.blocks.pop)
+
+    def add_border(self, width, height):
+        do_nothing = lambda x: None
+        green = curses.color_pair(2)
+
+        self.blocks[(0, 0)] = Block(Vec2(0, 0), '╔', green, do_nothing)
+
+        for x in range(1, width - 1):
+            self.blocks[(x, 0)] = Block(Vec2(x, 0), '═', green, do_nothing)
+
+        self.blocks[(width - 1, 0)] = Block(Vec2(width - 1, 0), '╗', green, do_nothing)
+
+        for y in range (1, height - 1):
+            self.blocks[(0, y)] = Block(Vec2(0, y), '║', green, do_nothing)
+            self.blocks[(width - 1, y)] = Block(Vec2(width - 1, y), '║', green, do_nothing)
 
     def handle_input(self, user_input):
-        if user_input == ord(' ') and self.in_play == False:
-            self.in_play = True
+        if user_input == ord(' '):
+            self.in_play = not self.in_play
         if self.in_play:
             if user_input == ord('h'):
                 self.paddle.move_left()
@@ -199,8 +200,7 @@ class Game(object):
                 self.paddle.move_right()
 
     def update(self, dt):
-        # also need to handle touching the edges
-        # and resetting if we touch the bottom
+        # todo: handle resetting if we touch the bottom
         if self.in_play:
             self.ball.update(self.paddle, self.blocks, dt)
 
@@ -222,7 +222,6 @@ class Game(object):
     def render_ball(self, screen):
         floored_x = math.floor(self.ball.pos.x)
         floored_y = math.floor(self.ball.pos.y)
-        logger.info('render ball at %d, %d', floored_x, floored_y)
         screen.addstr(floored_y, floored_x, 'O')
 
     def render_blocks(self, screen):
@@ -241,22 +240,16 @@ class Game(object):
 def main(screen):
     screen.nodelay(1) # user input is non-blocking
     curses.curs_set(0) # don't display cursor
-
     curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
 
     screen_y, screen_x = screen.getmaxyx()
     game = Game(screen_x, screen_y)
-    last_frame_time = datetime.now()
 
+    last_frame_time = datetime.now()
     while True:
         now = datetime.now()
-        # logger.info('now: %d', now)
-        # logger.info('last_frame_time: %d', last_frame_time)
-        rar = (now - last_frame_time).microseconds
-        logger.info('dt raw: %d', rar)
-        dt = rar / float(1000000)
-        logger.info('dt: %f', dt)
+        dt = (now - last_frame_time).microseconds / float(1000000)
         last_frame_time = now
 
         user_input = screen.getch()
