@@ -6,12 +6,6 @@ import math
 import curses
 import logging
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler('hello.log')
-handler.setLevel(logging.INFO)
-logger.addHandler(handler)
-
 class Block(object):
     def __init__(self, x, y, sym, color, on_hit):
         self.x = x
@@ -54,7 +48,7 @@ class Ball:
         self.angle = -math.pi/2 + random.uniform(-0.5, 0.5)
         self.direction_vec = Vec2(math.cos(self.angle),
                                   math.sin(self.angle))
-        self.speed = 8 # move 8 blocks per second
+        self.speed = 12 # move 12 blocks per second
 
     def update(self, paddle, blocks, dt):
         def get_new_position():
@@ -63,48 +57,41 @@ class Ball:
 
         # todo: technically we could cross more than one cell...
         def get_crossed_cell(old_pos, new_pos):
-            current_x = math.floor(new_pos.x)
-            current_y = math.floor(new_pos.y)
-            crossed_x = current_x != math.floor(old_pos.x)
-            crossed_y = current_y != math.floor(old_pos.y)
+            new_cell_x = math.floor(new_pos.x)
+            new_cell_y = math.floor(new_pos.y)
+            crossed_x = new_cell_x != math.floor(old_pos.x)
+            crossed_y = new_cell_y != math.floor(old_pos.y)
             if crossed_x and crossed_y:
-                return (Vec2(current_x, current_y), Plane.BOTH)
+                return (new_cell_x, new_cell_y, Plane.BOTH)
             if crossed_x:
-                return (Vec2(current_x, current_y), Plane.Y)
+                return (new_cell_x, new_cell_y, Plane.Y)
             if crossed_y:
-                return (Vec2(current_x, current_y), Plane.X)
+                return (new_cell_x, new_cell_y, Plane.X)
 
-        def get_hit_block_and_crossed_plane(cell):
-            block = blocks.get((cell[0].x, cell[0].y), None)
+        def get_hit_block(x, y):
+            block = blocks.get((x, y), None)
             if block:
-                return (block, cell[1])
-            if paddle.occupies_cell(cell[0].x, cell[0].y):
-                return (paddle, Plane.X)
+                return block
+            if paddle.occupies_cell(x, y):
+                return paddle
 
         # todo
-        def get_time_to_hit(hit_cell):
+        def get_time_to_hit(x, y, plane):
             return 0
 
-        logger.info('dt: %d', dt)
-        logger.info('old pos: %f, %f', self.pos.x, self.pos.y)
         new_pos = get_new_position()
-        logger.info('new pos: %f, %f', new_pos.x, new_pos.y)
-
         crossed_cell = get_crossed_cell(self.pos, new_pos)
         if not crossed_cell:
-            logger.info('no crossed cells')
             self.pos = new_pos
         else:
-            result = get_hit_block_and_crossed_plane(crossed_cell)
-            if not result:
-                logger.info('no hit block')
+            crossed_x, crossed_y, crossed_plane = crossed_cell
+            hit_block = get_hit_block(crossed_x, crossed_y)
+            if not hit_block:
                 self.pos = new_pos
             else:
-                logger.info('hit block')
-                hit_block, plane = result
-                time_to_hit = 0 # todo - paddle doesn't work with pos: get_time_to_hit(hit_block.pos)
+                time_to_hit = get_time_to_hit(crossed_x, crossed_y, crossed_plane)
                 time_remaining = dt - time_to_hit
-                self.bounce(plane)
+                self.bounce(crossed_plane)
                 hit_block.hit()
                 self.update(paddle, blocks, time_remaining)
 
