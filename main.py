@@ -1,5 +1,5 @@
 from datetime import datetime
-from enum import Enum
+from enum import IntEnum, Enum
 import random
 import time
 import math
@@ -10,21 +10,15 @@ class Block(object):
     def __init__(self, x, y, sym, color, on_hit):
         self.x = x
         self.y = y
-        self.on_hit = on_hit
         self.color = color
         self.sym = sym
+        self.on_hit = on_hit
 
     def hit(self):
         self.on_hit((self.x, self.y))
 
-    def render(self, screen):
-        max_y, max_x = screen.getmaxyx()
-        if self.x == max_x and self.y == max_y:
-            char = screen.getch(max_y, max_x - 1)
-            screen.addstr(max_y, max_x - 1, self.sym)
-            screen.insstr(max_y, max_x - 1, char)
-        else:
-            screen.addstr(self.y, self.x, self.sym, self.color)
+    def render(self, renderer):
+        renderer.render(self.x, self.y, self.sym, self.color)
 
 class Vec2(object):
     def __init__(self, x, y):
@@ -43,12 +37,14 @@ class Plane(Enum):
     BOTH = 2
 
 class Ball:
-    def __init__(self, pos):
-        self.pos = pos
-        self.angle = -math.pi/2 + random.uniform(-0.5, 0.5)
+    def __init__(self, width, miss_callback, renderer):
+        self.pos = Vec2(width // 2, 1)
+        self.angle = math.pi/2 + random.uniform(-0.5, 0.5)
         self.direction_vec = Vec2(math.cos(self.angle),
                                   math.sin(self.angle))
         self.speed = 12 # move 12 blocks per second
+        self.miss_callback = miss_callback
+        self.renderer = renderer
 
     def update(self, paddle, blocks, dt):
         def get_new_position():
@@ -80,20 +76,24 @@ class Ball:
             return 0
 
         new_pos = get_new_position()
-        crossed_cell = get_crossed_cell(self.pos, new_pos)
-        if not crossed_cell:
-            self.pos = new_pos
+        # todo: i don't like hard-coding this here
+        if new_pos.y < 0:
+            self.miss_callback()
         else:
-            crossed_x, crossed_y, crossed_plane = crossed_cell
-            hit_block = get_hit_block(crossed_x, crossed_y)
-            if not hit_block:
+            crossed_cell = get_crossed_cell(self.pos, new_pos)
+            if not crossed_cell:
                 self.pos = new_pos
             else:
-                time_to_hit = get_time_to_hit(crossed_x, crossed_y, crossed_plane)
-                time_remaining = dt - time_to_hit
-                self.bounce(crossed_plane)
-                hit_block.hit()
-                self.update(paddle, blocks, time_remaining)
+                crossed_x, crossed_y, crossed_plane = crossed_cell
+                hit_block = get_hit_block(crossed_x, crossed_y)
+                if not hit_block:
+                    self.pos = new_pos
+                else:
+                    time_to_hit = get_time_to_hit(crossed_x, crossed_y, crossed_plane)
+                    time_remaining = dt - time_to_hit
+                    self.bounce(crossed_plane)
+                    hit_block.hit()
+                    self.update(paddle, blocks, time_remaining)
 
     def bounce(self, plane):
         if plane == Plane.X or plane == Plane.BOTH:
@@ -105,12 +105,16 @@ class Ball:
                 self.angle = -math.pi - self.angle
         self.direction_vec = Vec2(math.cos(self.angle), math.sin(self.angle))
 
+    def render(self):
+        self.renderer.render(self.pos.x, self.pos.y, 'o', Color.YELLOW)
+
 class Paddle:
-    def __init__(self, x, y):
-        self.width = x // 5
-        self.max_x = x
-        self.x = x // 2 - self.width // 2
-        self.y = y
+    def __init__(self, max_x, renderer):
+        self.width = max_x // 5
+        self.max_x = max_x
+        self.x = max_x // 2 - self.width // 2
+        self.y = 0
+        self.renderer = renderer
 
     def occupies_cell(self, x, y):
         return self.y == y and x <= self.x + self.width and x >= self.x
@@ -126,39 +130,100 @@ class Paddle:
         if self.x + self.width < self.max_x:
             self.x += 1
 
+    def render(self):
+        paddle_icon = '=' * self.width
+        self.renderer.render(self.x, self.y, paddle_icon, Color.YELLOW)
+
+class Renderer:
+    def __init__(self, screen, max_x, max_y):
+        self.screen = screen
+        self.max_x = max_x
+        self.max_y = max_y
+
+    def clear(self):
+        for row in range(0, self.max_y):
+            self.render(0, row, ' ' * self.max_x)
+
+    def render(self, x, y, string, color = 1):
+        x = int(x)
+        y = int(y)
+        string_len = len(string)
+        last_x = x + string_len
+        if last_x > self.max_x:
+            max_len = string_len - (last_x - self.max_x)
+            string = string[:max_len]
+
+        if y > self.max_y:
+            y = self.max_y
+
+        curses_color = curses.color_pair(color)
+        flip_y = self.max_y - 1 - y
+
+        if y == 0 and x + len(string) == self.max_x:
+            # curses cannot directly output to the last cell
+            all_but_first = string[1:]
+            self.screen.addstr(flip_y, x, all_but_first, curses_color)
+            self.screen.insstr(flip_y, x, string[0], curses_color)
+        else:
+            self.screen.addstr(flip_y, x, string, curses_color)
+
+    def render_message(self, message):
+        # todo: handle small screen widths
+        starting_x = self.max_x // 2 - (len(message) // 2)
+        self.render(starting_x, self.max_y // 2, message, Color.YELLOW)
+
+class Color(IntEnum):
+    # todo: where would be a more natural place for this logic?
+    @classmethod
+    def init(cls):
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+        curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLACK)
+
+    RED = 1
+    GREEN = 2
+    YELLOW = 3
+    BLUE = 4
+
 class Game(object):
-    def __init__(self, width, height):
+    def __init__(self, width, height, renderer):
         self.size = (width, height)
         self.in_play = False
-        self.paddle = Paddle(width, height - 1)
-        self.ball = Ball(Vec2(width // 2, height - 2))
-
+        self.finished = False
+        self.renderer = renderer # todo: remove
+        self.paddle = Paddle(width, renderer)
+        self.ball = Ball(width, self.handle_miss, renderer)
         self.blocks = {}
         self.add_blocks(width, height)
 
+    def handle_miss(self):
+        self.finished = True
+        self.in_play = False
+
     def add_blocks(self, width, height):
         self.add_border(width, height)
-        yellow = curses.color_pair(1)
+        yellow = Color.YELLOW
         for x in range(2, width - 3):
-            for y in range(2, height // 2):
+            for y in range(height // 2, height - 2):
                 self.blocks[(x, y)] = Block(x, y, '%', yellow, self.blocks.pop)
 
     def add_border(self, width, height):
         noop = lambda x: None
-        green = curses.color_pair(2)
+        green = Color.GREEN
 
-        self.blocks[(0, 0)] = Block(0, 0, '╔', green, noop)
-        self.blocks[(width - 1, 0)] = Block(width - 1, 0, '╗', green, noop)
+        self.blocks[(0, height - 1)] = Block(0, height - 1, '╔', green, noop)
+        self.blocks[(width - 1, height - 1)] = Block(width - 1, height - 1, '╗', green, noop)
 
         for x in range(1, width - 1):
-            self.blocks[(x, 0)] = Block(x, 0, '═', green, noop)
+            self.blocks[(x, height - 1)] = Block(x, height - 1, '═', green, noop)
 
         for y in range (1, height - 1):
             self.blocks[(0, y)] = Block(0, y, '║', green, noop)
             self.blocks[(width - 1, y)] = Block(width - 1, y, '║', green, noop)
 
     def handle_input(self, user_input):
-        if user_input == ord(' '):
+        if user_input == ord(' ') and not self.finished:
             self.in_play = not self.in_play
         if self.in_play:
             if user_input == ord('h'):
@@ -172,46 +237,24 @@ class Game(object):
             self.ball.update(self.paddle, self.blocks, dt)
 
     def render(self, screen):
-        def clear_screen():
-            for row in range(0, self.size[1] - 1):
-                screen.addstr(row, 0, ' ' * self.size[0])
-
-            # we can't write the last character normally with curses
-            screen.addstr(self.size[1] - 1, 0, ' ' * (self.size[0] - 1))
-            screen.insstr(self.size[1] - 1, self.size[0] - 1, ' ')
-
-        clear_screen()
-        self.render_blocks(screen)
-        self.render_ball(screen)
-        self.render_paddle(screen)
-        screen.refresh()
-
-    def render_ball(self, screen):
-        floored_x = math.floor(self.ball.pos.x)
-        floored_y = math.floor(self.ball.pos.y)
-        screen.addstr(floored_y, floored_x, 'O')
-
-    def render_blocks(self, screen):
-        for pos, block in self.blocks.items():
-            block.render(screen)
-
-    def render_paddle(self, screen):
-        if self.paddle.x + self.paddle.width > self.size[0]:
-            screen.addstr(self.paddle.y, self.paddle.x, '=' * self.paddle.width)
+        self.renderer.clear()
+        if self.finished:
+            self.renderer.render_message('GAME OVER')
         else:
-            # we can't write the last character normally with curses
-            screen.addstr(self.paddle.y,
-                          self.paddle.x, '=' * (self.paddle.width-1))
-            screen.insstr(self.paddle.y, self.paddle.x+1, '=')
+            self.ball.render()
+            self.paddle.render()
+            for pos, block in self.blocks.items():
+                block.render(self.renderer)
+        screen.refresh()
 
 def main(screen):
     screen.nodelay(1) # user input is non-blocking
     curses.curs_set(0) # don't display cursor
-    curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    Color.init()
 
-    screen_y, screen_x = screen.getmaxyx()
-    game = Game(screen_x, screen_y)
+    max_y, max_x = screen.getmaxyx()
+    renderer = Renderer(screen, max_x, max_y)
+    game = Game(max_x, max_y, renderer)
 
     last_frame_time = datetime.now()
     while True:
