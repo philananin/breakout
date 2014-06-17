@@ -10,4 +10,6 @@ Yes, I know about pygame. I'm trying to make sure I understand the fundamentals 
 Setup
 =====
 
-Run `python main.py`. That's it.
+At the moment it'll only work on OSX with afplay installed, because I haven't yet figured out a cross-platform way to play sounds yet.
+
+Run `python3 main.py`. That's it.

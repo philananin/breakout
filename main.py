@@ -4,7 +4,8 @@ import random
 import time
 import math
 import curses
-import logging
+import os
+import subprocess
 
 class Block(object):
     def __init__(self, x, y, sym, color, on_hit):
@@ -37,14 +38,13 @@ class Plane(Enum):
     BOTH = 2
 
 class Ball:
-    def __init__(self, width, miss_callback, renderer):
+    def __init__(self, width, miss_callback):
         self.pos = Vec2(width // 2, 1)
         self.angle = math.pi/2 + random.uniform(-0.5, 0.5)
         self.direction_vec = Vec2(math.cos(self.angle),
                                   math.sin(self.angle))
         self.speed = 12 # move 12 blocks per second
         self.miss_callback = miss_callback
-        self.renderer = renderer
 
     def update(self, paddle, blocks, dt):
         def get_new_position():
@@ -105,22 +105,39 @@ class Ball:
                 self.angle = -math.pi - self.angle
         self.direction_vec = Vec2(math.cos(self.angle), math.sin(self.angle))
 
-    def render(self):
-        self.renderer.render(self.pos.x, self.pos.y, 'o', Color.YELLOW)
+    def render(self, renderer):
+        renderer.render(self.pos.x, self.pos.y, 'o', Color.YELLOW)
 
-class Paddle:
-    def __init__(self, max_x, renderer):
+# todo: this probably isn't a very pythonic way to do this
+class Observable:
+    def __init__(self):
+        self.observers = {}
+
+    def observe(self, event, observer):
+        existing = self.observers.get(event, None)
+        if existing:
+            existing.append(observer)
+        else:
+            self.observers[event] = [observer]
+
+    def emit(self, event):
+        if event in self.observers:
+            for observer in self.observers[event]:
+                observer()
+
+class Paddle(Observable):
+    def __init__(self, max_x):
+        super().__init__()
         self.width = max_x // 5
         self.max_x = max_x
         self.x = max_x // 2 - self.width // 2
         self.y = 0
-        self.renderer = renderer
 
     def occupies_cell(self, x, y):
         return self.y == y and x <= self.x + self.width and x >= self.x
 
     def hit(self):
-        pass
+        self.emit('hit')
 
     def move_left(self):
         if self.x > 0:
@@ -130,9 +147,9 @@ class Paddle:
         if self.x + self.width < self.max_x:
             self.x += 1
 
-    def render(self):
+    def render(self, renderer):
         paddle_icon = '=' * self.width
-        self.renderer.render(self.x, self.y, paddle_icon, Color.YELLOW)
+        renderer.render(self.x, self.y, paddle_icon, Color.YELLOW)
 
 class Renderer:
     def __init__(self, screen, max_x, max_y):
@@ -192,10 +209,17 @@ class Game(object):
         self.in_play = False
         self.finished = False
         self.renderer = renderer # todo: remove
-        self.paddle = Paddle(width, renderer)
-        self.ball = Ball(width, self.handle_miss, renderer)
+        self.paddle = Paddle(width)
+        self.paddle.observe('hit', lambda: self.play_sound('paddle-hit.wav'))
+        self.ball = Ball(width, self.handle_miss)
         self.blocks = {}
         self.add_blocks(width, height)
+
+    # todo: this isn't portable or efficient...
+    def play_sound(self, sound):
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        audio_file = current_dir + '/' + sound
+        return_code = subprocess.call(["afplay", audio_file])
 
     def handle_miss(self):
         self.finished = True
@@ -203,10 +227,9 @@ class Game(object):
 
     def add_blocks(self, width, height):
         self.add_border(width, height)
-        yellow = Color.YELLOW
         for x in range(2, width - 3):
             for y in range(height // 2, height - 2):
-                self.blocks[(x, y)] = Block(x, y, '%', yellow, self.blocks.pop)
+                self.blocks[(x, y)] = Block(x, y, '%', Color.YELLOW, self.blocks.pop)
 
     def add_border(self, width, height):
         noop = lambda x: None
@@ -241,8 +264,8 @@ class Game(object):
         if self.finished:
             self.renderer.render_message('GAME OVER')
         else:
-            self.ball.render()
-            self.paddle.render()
+            self.ball.render(self.renderer)
+            self.paddle.render(self.renderer)
             for pos, block in self.blocks.items():
                 block.render(self.renderer)
         screen.refresh()
