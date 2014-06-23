@@ -210,16 +210,13 @@ class Game(object):
         self.finished = False
         self.renderer = renderer # todo: remove
         self.paddle = Paddle(width)
-        self.paddle.observe('hit', lambda: self.play_sound('paddle-hit.wav'))
+        self.paddle.observe('hit', self.beep)
         self.ball = Ball(width, self.handle_miss)
         self.blocks = {}
         self.add_blocks(width, height)
 
-    # todo: this isn't portable or efficient...
-    def play_sound(self, sound):
-        current_dir = os.path.dirname(os.path.realpath(__file__))
-        audio_file = current_dir + '/' + sound
-        return_code = subprocess.call(["afplay", audio_file])
+    def beep(self):
+        print('\a')
 
     def handle_miss(self):
         self.finished = True
@@ -297,3 +294,4 @@ def main(screen):
 
 if __name__ == '__main__':
     curses.wrapper(main)
+
