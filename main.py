@@ -184,6 +184,9 @@ class Renderer:
         else:
             self.screen.addstr(flip_y, x, string, curses_color)
 
+    def render_points(self, points):
+        self.render(1, self.max_y - 1, str(points), Color.RED)
+
     def render_message(self, message):
         # todo: handle small screen widths
         starting_x = self.max_x // 2 - (len(message) // 2)
@@ -214,6 +217,7 @@ class Game(object):
         self.ball = Ball(width, self.handle_miss)
         self.blocks = {}
         self.add_blocks(width, height)
+        self.points = 0
 
     def beep(self):
         print('\a')
@@ -222,11 +226,16 @@ class Game(object):
         self.finished = True
         self.in_play = False
 
+    def handle_block_hit(self, coords):
+        self.blocks.pop(coords)
+        self.points += 50
+
     def add_blocks(self, width, height):
         self.add_border(width, height)
         for x in range(2, width - 3):
             for y in range(height // 2, height - 2):
-                self.blocks[(x, y)] = Block(x, y, '%', Color.YELLOW, self.blocks.pop)
+                self.blocks[(x, y)] = Block(x, y, '%', Color.YELLOW,
+                                            self.handle_block_hit)
 
     def add_border(self, width, height):
         noop = lambda x: None
@@ -265,6 +274,7 @@ class Game(object):
             self.paddle.render(self.renderer)
             for pos, block in self.blocks.items():
                 block.render(self.renderer)
+        self.renderer.render_points(self.points)
         screen.refresh()
 
 def main(screen):
