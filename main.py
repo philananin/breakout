@@ -8,18 +8,18 @@ import os
 import subprocess
 
 class Block(object):
-    def __init__(self, x, y, sym, color, on_hit):
-        self.x = x
-        self.y = y
-        self.color = color
+    def __init__(self, x, y, sym, color, on_hit=lambda x: None, size=1):
+        self.x, self.y = x, y
         self.sym = sym
+        self.color = color
         self.on_hit = on_hit
+        self.size = size
 
     def hit(self):
         self.on_hit((self.x, self.y))
 
     def render(self, renderer):
-        renderer.render(self.x, self.y, self.sym, self.color)
+        renderer.render(self.x, self.y, self.sym * self.size, self.color)
 
 class Vec2(object):
     def __init__(self, x, y):
@@ -228,28 +228,31 @@ class Game(object):
 
     def handle_block_hit(self, coords):
         self.blocks.pop(coords)
+        x, y = coords
+        self.blocks.pop((x + 1, y))
         self.points += 50
 
     def add_blocks(self, width, height):
         self.add_border(width, height)
-        for x in range(2, width - 3):
-            for y in range(height // 2, height - 2):
-                self.blocks[(x, y)] = Block(x, y, '%', Color.YELLOW,
-                                            self.handle_block_hit)
+        for y in range(height // 2, height - 2):
+            for x in range(2, width - 3, 2):
+                block = Block(x, y, '%', Color.YELLOW, self.handle_block_hit, 2)
+                self.blocks[(x, y)] = block
+                self.blocks[(x + 1, y)] = block
 
     def add_border(self, width, height):
         noop = lambda x: None
         green = Color.GREEN
 
-        self.blocks[(0, height - 1)] = Block(0, height - 1, '╔', green, noop)
-        self.blocks[(width - 1, height - 1)] = Block(width - 1, height - 1, '╗', green, noop)
+        self.blocks[(0, height - 1)] = Block(0, height - 1, '╔', green)
+        self.blocks[(width - 1, height - 1)] = Block(width - 1, height - 1, '╗', green)
 
         for x in range(1, width - 1):
-            self.blocks[(x, height - 1)] = Block(x, height - 1, '═', green, noop)
+            self.blocks[(x, height - 1)] = Block(x, height - 1, '═', green)
 
         for y in range (1, height - 1):
-            self.blocks[(0, y)] = Block(0, y, '║', green, noop)
-            self.blocks[(width - 1, y)] = Block(width - 1, y, '║', green, noop)
+            self.blocks[(0, y)] = Block(0, y, '║', green)
+            self.blocks[(width - 1, y)] = Block(width - 1, y, '║', green)
 
     def handle_input(self, user_input):
         if user_input == ord(' ') and not self.finished:
