@@ -65,7 +65,7 @@ class Ball:
                 return (new_cell_x, new_cell_y, Plane.X)
 
         def get_hit_block(x, y):
-            block = blocks.get((x, y), None)
+            block = blocks.get((x, y), None) or blocks.get((x + 1, y))
             if block:
                 return block
             if paddle.occupies_cell(x, y):
@@ -215,8 +215,10 @@ class Game(object):
         self.paddle = Paddle(width)
         self.paddle.observe('hit', self.beep)
         self.ball = Ball(width, self.handle_miss)
-        self.blocks = {}
-        self.add_blocks(width, height)
+        self.blocks = {(x, y):Block(x, y, '%', Color.YELLOW, self.block_hit, 2)
+                       for x in range(2, width - 3, 2)
+                       for y in range(height // 2, height - 2)}
+        self.add_border(width, height)
         self.points = 0
 
     def beep(self):
@@ -226,22 +228,13 @@ class Game(object):
         self.finished = True
         self.in_play = False
 
-    def handle_block_hit(self, coords):
-        self.blocks.pop(coords)
+    def block_hit(self, coords):
         x, y = coords
-        self.blocks.pop((x + 1, y))
+        if not self.blocks.pop((x, y), None):
+            self.blocks.pop((x + 1, y), None)
         self.points += 50
 
-    def add_blocks(self, width, height):
-        self.add_border(width, height)
-        for y in range(height // 2, height - 2):
-            for x in range(2, width - 3, 2):
-                block = Block(x, y, '%', Color.YELLOW, self.handle_block_hit, 2)
-                self.blocks[(x, y)] = block
-                self.blocks[(x + 1, y)] = block
-
     def add_border(self, width, height):
-        noop = lambda x: None
         green = Color.GREEN
 
         self.blocks[(0, height - 1)] = Block(0, height - 1, '╔', green)
