@@ -4,7 +4,7 @@ from datetime import datetime
 from time import sleep
 
 from game import Game
-from renderer import CursesRenderer
+from graphics import CursesGraphics
 
 def main(screen):
     screen.nodelay(1) # user input is non-blocking
@@ -17,8 +17,8 @@ def main(screen):
     curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLACK)
 
     max_y, max_x = screen.getmaxyx()
-    renderer = CursesRenderer(screen, max_x, max_y)
-    game = Game(max_x, max_y, renderer)
+    game = Game(max_x, max_y)
+    graphics = CursesGraphics(screen, max_x, max_y)
 
     last_frame_time = datetime.now()
     while True:
@@ -32,7 +32,7 @@ def main(screen):
             game.handle_input(user_input)
 
         game.update(time_diff)
-        game.render(screen)
+        game.draw(graphics)
         # todo: put fps limit in?
         sleep(0.01)
 

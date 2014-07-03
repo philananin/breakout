@@ -39,6 +39,6 @@ class Paddle(Observable):
         if self.x + self.width < self.max_x:
             self.x += 1
 
-    def render(self, renderer):
+    def draw(self, graphics):
         paddle_icon = '=' * self.width
-        renderer.render(self.x, self.y, paddle_icon, Color.YELLOW)
+        graphics.draw(self.x, self.y, paddle_icon, Color.YELLOW)

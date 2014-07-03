@@ -87,5 +87,5 @@ class Ball:
                 self.angle = -pi - self.angle
         self.direction_vec = Vec2(cos(self.angle), sin(self.angle))
 
-    def render(self, renderer):
-        renderer.render(self.pos.x, self.pos.y, 'o', Color.YELLOW)
+    def draw(self, graphics):
+        graphics.draw(self.pos.x, self.pos.y, 'o', Color.YELLOW)

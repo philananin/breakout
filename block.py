@@ -9,5 +9,5 @@ class Block(object):
     def hit(self):
         self.on_hit((self.x, self.y))
 
-    def render(self, renderer):
-        renderer.render(self.x, self.y, self.sym * self.size, self.color)
+    def draw(self, graphics):
+        graphics.draw(self.x, self.y, self.sym * self.size, self.color)
