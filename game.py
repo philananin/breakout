@@ -22,7 +22,7 @@ class Game:
         self.points = 0
         self.paddle = Paddle(width)
         self.paddle.observe('hit', beep)
-        self.ball = Ball(width, self.handle_miss)
+        self.ball = Ball(x=width // 2, y=1, miss_callback=self.handle_miss)
         self.blocks = {(x, y):Block(x, y, '%', Color.YELLOW, self.block_hit, 2)
                        for x in range(2, width - 3, 2)
                        for y in range(height // 2, height - 2)}
