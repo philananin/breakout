@@ -33,7 +33,7 @@ class Ball:
                 return (new_cell_x, new_cell_y, Plane.Y)
 
         def get_hit_block(x, y):
-            block = blocks.get((x, y), None) or blocks.get((x + 1, y))
+            block = blocks.get((x, y), None) or blocks.get((x - 1, y))
             if block:
                 return block
             if paddle.occupies_cell(x, y):
