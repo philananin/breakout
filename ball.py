@@ -2,17 +2,21 @@ from math import cos, sin, pi, floor
 from random import uniform as random_between
 from enum import Enum
 from color import Color
+from observable import Observable
+
+def is_miss(y_pos):
+    return y_pos < 0
 
 class Plane(Enum):
     X = 0
     Y = 1
 
-class Ball:
-    def __init__(self, x, y, miss_callback):
+class Ball(Observable):
+    def __init__(self, x, y):
+        super().__init__()
         self.x, self.y = x, y
         self.angle = pi/2 + random_between(-0.5, 0.5)
         self.speed = 12 # move 12 blocks per second
-        self.miss_callback = miss_callback
 
     def update(self, paddle, blocks, dt):
         def get_new_position():
@@ -45,8 +49,8 @@ class Ball:
 
         new_x, new_y = get_new_position()
         # todo: i don't like hard-coding this here
-        if new_y < 0:
-            self.miss_callback()
+        if is_miss(new_y):
+            self.emit('miss')
         else:
             crossed_cell = get_crossed_cell(new_x, new_y)
             if not crossed_cell:
