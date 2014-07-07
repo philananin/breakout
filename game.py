@@ -1,6 +1,6 @@
 from color import Color
 from block import Block
-from paddle import Paddle
+from paddle import Paddle, Direction
 from ball import Ball
 
 def beep():
@@ -14,6 +14,9 @@ def get_border(width, height, color):
     right = [Block(width - 1, y, '║', color) for y in range(1, height)]
     blocks = [top_left] + [top_right] + top + left + right
     return {(block.x, block.y):block for block in blocks}
+
+directions_map = {ord('h'):Direction.LEFT,
+                  ord('l'):Direction.RIGHT}
 
 class Game:
     def __init__(self, width, height):
@@ -43,13 +46,14 @@ class Game:
         if user_input == ord(' ') and not self.finished:
             self.in_play = not self.in_play
         if self.in_play:
-            if user_input == ord('h'):
-                self.paddle.move_left()
-            if user_input == ord('l'):
-                self.paddle.move_right()
+            if user_input in directions_map:
+                self.paddle.move(directions_map[user_input])
+            else:
+                self.paddle.no_movement()
 
     def update(self, dt):
         if self.in_play:
+            self.paddle.update(dt)
             self.ball.update(self.paddle, self.blocks, dt)
 
     def draw(self, graphics):

@@ -4,9 +4,6 @@ from enum import Enum
 from color import Color
 from observable import Observable
 
-def is_miss(y_pos):
-    return y_pos < 0
-
 class Plane(Enum):
     X = 0
     Y = 1
@@ -24,6 +21,9 @@ class Ball(Observable):
             dir_x, dir_y = cos(self.angle), sin(self.angle)
             scaled_x, scaled_y = dir_x * scaled_speed, dir_y * scaled_speed
             return self.x + scaled_x, self.y + scaled_y
+
+        def is_miss(y_pos):
+            return y_pos < 0
 
         # todo: technically we could cross more than one cell...
         def get_crossed_cell(new_x, new_y):
@@ -47,8 +47,17 @@ class Ball(Observable):
         def get_time_to_hit(x, y, plane):
             return 0
 
+        def bounce(starting_angle, plane):
+            if plane == Plane.X:
+                return -starting_angle
+            if plane == Plane.Y:
+                if starting_angle >= 0:
+                    return pi - starting_angle
+                else:
+                    return -pi - starting_angle
+
         new_x, new_y = get_new_position()
-        # todo: i don't like hard-coding this here
+
         if is_miss(new_y):
             self.emit('miss')
         else:
@@ -63,18 +72,9 @@ class Ball(Observable):
                 else:
                     time_to_hit = get_time_to_hit(crossed_x, crossed_y, crossed_plane)
                     time_remaining = dt - time_to_hit
-                    self.bounce(crossed_plane)
+                    self.angle = bounce(self.angle, crossed_plane)
                     hit_block.hit()
                     self.update(paddle, blocks, time_remaining)
-
-    def bounce(self, plane):
-        if plane == Plane.X:
-            self.angle = -self.angle
-        if plane == Plane.Y:
-            if self.angle >= 0:
-                self.angle = pi - self.angle
-            else:
-                self.angle = -pi - self.angle
 
     def draw(self, graphics):
         graphics.draw(self.x, self.y, 'o', Color.YELLOW)

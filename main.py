@@ -27,9 +27,7 @@ def main(screen):
         last_frame_time = now
 
         user_input = screen.getch()
-        no_user_input = user_input == -1
-        if not no_user_input:
-            game.handle_input(user_input)
+        game.handle_input(user_input)
 
         game.update(time_diff)
         game.draw(graphics)
