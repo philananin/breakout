@@ -4,6 +4,8 @@ from enum import Enum
 from color import Color
 from observable import Observable
 
+STARTING_VELOCITY = 15
+
 class Plane(Enum):
     X = 0
     Y = 1
@@ -13,11 +15,11 @@ class Ball(Observable):
         super().__init__()
         self.x, self.y = x, y
         self.angle = pi/2 + random_between(-0.5, 0.5)
-        self.speed = 12 # move 12 blocks per second
+        self.velocity = STARTING_VELOCITY
 
     def update(self, paddle, blocks, dt):
         def get_new_position():
-            scaled_speed = dt * self.speed
+            scaled_speed = dt * self.velocity
             dir_x, dir_y = cos(self.angle), sin(self.angle)
             scaled_x, scaled_y = dir_x * scaled_speed, dir_y * scaled_speed
             return self.x + scaled_x, self.y + scaled_y
@@ -37,7 +39,7 @@ class Ball(Observable):
                 return (new_cell_x, new_cell_y, Plane.Y)
 
         def get_hit_block(x, y):
-            block = blocks.get((x, y), None) or blocks.get((x - 1, y))
+            block = blocks.get_block(x, y)
             if block:
                 return block
             if paddle.occupies_cell(x, y):
