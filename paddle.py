@@ -28,20 +28,19 @@ class Paddle(Observable):
         self.emit('hit')
 
     def move(self, direction):
-        if self.direction != direction:
-            self.move_has_changed = True
+        self.move_has_changed = self.direction != direction
         self.direction = direction
         self.no_move = False
 
     def no_movement(self):
-        self.move_has_changed = self.no_move != True
+        self.move_has_changed = not self.no_move
         self.no_move = True
 
     def update(self, dt):
         if self.no_move:
             self.velocity -= FRICTION * dt
             self.velocity = self.velocity if self.velocity > 0 else 0
-        elif self.move_has_changed:
+        elif self.move_has_changed or self.velocity == 0:
             self.velocity = 0.25
         else:
             self.velocity += self.velocity * ACCELERATION * dt
